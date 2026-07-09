@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { EmitCardsSchema, EmitResearchSchema } from "@/lib/types";
-import { appendCards, getSession, requeueFront, decide } from "@/lib/session-store";
+import { appendCards, createSession, getSession, requeueFront, decide } from "@/lib/session-store";
 
 function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -82,7 +82,13 @@ export async function POST(req: Request) {
     try {
       if (name === "emit_cards") {
         const parsed = EmitCardsSchema.parse(args);
-        if (!getSession(parsed.sessionId)) throw new Error("Unknown session");
+        if (!getSession(parsed.sessionId)) {
+          createSession({
+            id: parsed.sessionId,
+            userId: "cloud-agent",
+            pitch: req.headers.get("x-char-pitch") || "pitch-only grill",
+          });
+        }
         const session = appendCards(parsed.sessionId, parsed.cards, parsed.done);
         return NextResponse.json({
           jsonrpc: "2.0",
@@ -131,6 +137,13 @@ export async function POST(req: Request) {
   // Direct REST fallbacks (easier to test)
   if (body.tool === "emit_cards" || body.name === "emit_cards") {
     const parsed = EmitCardsSchema.parse(body.arguments || body);
+    if (!getSession(parsed.sessionId)) {
+      createSession({
+        id: parsed.sessionId,
+        userId: "cloud-agent",
+        pitch: req.headers.get("x-char-pitch") || "pitch-only grill",
+      });
+    }
     const session = appendCards(parsed.sessionId, parsed.cards, parsed.done);
     return NextResponse.json({ ok: true, session });
   }

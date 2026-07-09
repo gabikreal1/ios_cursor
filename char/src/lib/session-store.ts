@@ -12,13 +12,14 @@ function store() {
 }
 
 export function createSession(input: {
+  id?: string;
   userId: string;
   pitch: string;
   repoUrl?: string;
 }): CharSession {
   const now = new Date().toISOString();
   const session: CharSession = {
-    id: randomUUID(),
+    id: input.id || randomUUID(),
     userId: input.userId,
     pitch: input.pitch,
     repoUrl: input.repoUrl || undefined,
