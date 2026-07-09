@@ -2,14 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth, SignInButton } from "@clerk/nextjs";
 import BlurText from "@/components/BlurText";
 import { Button } from "@/components/ui/button";
-import { AuthChrome } from "@/components/char/AuthChrome";
 
 const MIN_PITCH = 8;
-const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
-const bypass = process.env.NEXT_PUBLIC_CHAR_DEV_BYPASS === "1";
 
 type HeatProps = {
   pitch: string;
@@ -18,31 +14,6 @@ type HeatProps = {
 };
 
 function HeatControls({ pitch, repoUrl, pitchReady }: HeatProps) {
-  if (clerkEnabled && !bypass) {
-    return (
-      <ClerkHeatControls
-        pitch={pitch}
-        repoUrl={repoUrl}
-        pitchReady={pitchReady}
-      />
-    );
-  }
-  return (
-    <GuestHeatControls
-      pitch={pitch}
-      repoUrl={repoUrl}
-      pitchReady={pitchReady}
-      label={bypass ? "Heat it (dev)" : "Heat it"}
-    />
-  );
-}
-
-function GuestHeatControls({
-  pitch,
-  repoUrl,
-  pitchReady,
-  label,
-}: HeatProps & { label: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,62 +29,6 @@ function GuestHeatControls({
       setError(e instanceof Error ? e.message : String(e));
       setBusy(false);
     }
-  }
-
-  return (
-    <>
-      <Button
-        disabled={busy || !pitchReady}
-        onClick={heat}
-        className="h-14 w-full rounded-full bg-white text-base font-medium text-black hover:bg-white/90 disabled:opacity-40"
-      >
-        {busy ? "Striking match…" : label}
-      </Button>
-      {error && (
-        <p className="mt-3 text-center text-sm text-rose-300">{error}</p>
-      )}
-    </>
-  );
-}
-
-function ClerkHeatControls({ pitch, repoUrl, pitchReady }: HeatProps) {
-  const router = useRouter();
-  const { isLoaded, isSignedIn } = useAuth();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function heat() {
-    if (!pitchReady || busy || !isSignedIn) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const sessionId = await postSession(pitch, repoUrl);
-      router.push(`/s/${sessionId}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setBusy(false);
-    }
-  }
-
-  if (!isLoaded) {
-    return (
-      <Button
-        disabled
-        className="h-14 w-full rounded-full bg-white text-base font-medium text-black disabled:opacity-40"
-      >
-        Lighting…
-      </Button>
-    );
-  }
-
-  if (!isSignedIn) {
-    return (
-      <SignInButton mode="modal">
-        <Button className="h-14 w-full rounded-full bg-white text-base font-medium text-black hover:bg-white/90">
-          Sign in to heat it
-        </Button>
-      </SignInButton>
-    );
   }
 
   return (
@@ -167,7 +82,9 @@ export default function HomePage() {
         <p className="text-[11px] uppercase tracking-[0.28em] text-white/40">
           CHAR
         </p>
-        <AuthChrome />
+        <span className="text-[10px] uppercase tracking-[0.2em] text-amber-300/60">
+          hack mode
+        </span>
       </header>
 
       <div className="relative z-10 flex flex-1 flex-col">
