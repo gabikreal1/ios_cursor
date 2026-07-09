@@ -41,64 +41,83 @@ function mcpServers(sessionId: string) {
 /** Demo cards when CURSOR_API_KEY missing or CHAR_MOCK=1 */
 export function mockEmitCards(session: CharSession) {
   const grounded = session.repoUrl ? "repo-grounded" : "pitch-only";
+  const idea = session.pitch.length > 90
+    ? `${session.pitch.slice(0, 87)}…`
+    : session.pitch;
   const cards: AssumptionCard[] = [
     {
       id: randomUUID(),
-      category: "Wedge",
+      category: "Customer",
       assumption:
-        "Solo founders will open CHAR in the post-idea / pre-build window, not during weekly planning.",
+        `A specific group of people feels the pain behind “${idea}” often enough to seek a new solution.`,
       recommendedStance: "keep",
-      rationale: "Matches the locked ICP moment; weekly planning is crowded.",
+      rationale: "No sharp customer and urgent pain means there is no wedge.",
       kind: "assumption",
       grounded,
       researchSuggestions: [
-        "Indie Hackers posts about idea→build drop-off",
-        "Cursor iOS usage moments",
-        "Competing PM chatbot retention",
+        "Interview five target users",
+        "Find existing workarounds",
+        "Measure how often the pain occurs",
       ],
     },
     {
       id: randomUUID(),
-      category: "Interaction",
+      category: "Behavior",
       assumption:
-        "Swipe keep/kill on assumptions beats a chat Q&A for forcing decisions.",
+        "Users will change their current behavior instead of tolerating the problem or using their existing workaround.",
       recommendedStance: "keep",
-      rationale: "Muscle-memory judgment; chat invites performance.",
+      rationale: "A better product still loses when switching cost beats pain.",
       kind: "assumption",
       grounded,
       researchSuggestions: [
-        "Tinder-for-ideas products",
-        "Unilever Idea Swipe case",
-        "Decision fatigue studies on binary choice",
+        "Map the current workflow",
+        "Estimate switching cost",
+        "Test a manual concierge version",
+      ],
+    },
+    {
+      id: randomUUID(),
+      category: "Promise",
+      assumption:
+        "The product can deliver its core promise quickly enough that a first-time user feels the win in one session.",
+      recommendedStance: "keep",
+      rationale: "If value arrives late, activation dies before the idea gets a chance.",
+      kind: "assumption",
+      grounded,
+      researchSuggestions: [
+        "Define the first five-minute win",
+        "Prototype the happy path",
+        "Remove setup steps",
       ],
     },
     {
       id: randomUUID(),
       category: "Distribution",
       assumption:
-        "Applying rails into the repo (CHAR.md + ADRs) is more valuable than a shareable roast image.",
-      recommendedStance: "keep",
-      rationale: "Cursor Agent SDK is the differentiator.",
-      kind: "fork",
+        "There is one repeatable channel where target users already gather and can be reached without paid scale.",
+      recommendedStance: "research",
+      rationale: "A product without an acquisition path is a private demo.",
+      kind: "assumption",
       grounded,
       researchSuggestions: [
-        "Matt Pocock ADR adoption",
-        "AGENTS.md conventions",
-        "Founder willingness to grant GitHub write",
+        "Name the first 20 users",
+        "Audit niche communities",
+        "Test one founder-led channel",
       ],
     },
     {
       id: randomUUID(),
-      category: "Monetization",
-      assumption: "Founders will pay $10/mo before they have a repo.",
-      recommendedStance: "kill",
-      rationale: "Pre-repo moment is fragile; monetize after first Apply win.",
-      kind: "assumption",
+      category: "Money",
+      assumption:
+        "The value is painful or valuable enough that someone will pay before the product becomes feature-complete.",
+      recommendedStance: "research",
+      rationale: "Usage without willingness to pay can hide a hobby, not a business.",
+      kind: "fork",
       grounded,
       researchSuggestions: [
-        "Indie tool pricing benchmarks",
-        "Freemium conversion for devtools",
-        "Hackathon-to-paid paths",
+        "Ask for a paid pilot",
+        "Test three price points",
+        "Compare the cost of the current workaround",
       ],
     },
   ];

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import BlurText from "@/components/BlurText";
 import { Button } from "@/components/ui/button";
+import type { CharSession } from "@/lib/types";
 
 const MIN_PITCH = 8;
 
@@ -23,8 +24,9 @@ function HeatControls({ pitch, repoUrl, pitchReady }: HeatProps) {
     setBusy(true);
     setError(null);
     try {
-      const sessionId = await postSession(pitch, repoUrl);
-      router.push(`/s/${sessionId}`);
+      const session = await postSession(pitch, repoUrl);
+      sessionStorage.setItem(`char:${session.id}`, JSON.stringify(session));
+      router.push(`/s/${session.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setBusy(false);
@@ -47,14 +49,17 @@ function HeatControls({ pitch, repoUrl, pitchReady }: HeatProps) {
   );
 }
 
-async function postSession(pitch: string, repoUrl: string): Promise<string> {
+async function postSession(
+  pitch: string,
+  repoUrl: string,
+): Promise<CharSession> {
   const res = await fetch("/api/sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ pitch, repoUrl }),
   });
   const text = await res.text();
-  let data: { error?: string; session?: { id: string } } = {};
+  let data: { error?: string; session?: CharSession } = {};
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
@@ -66,7 +71,7 @@ async function postSession(pitch: string, repoUrl: string): Promise<string> {
   }
   if (!res.ok) throw new Error(data.error || "Failed to start");
   if (!data.session?.id) throw new Error("No session returned");
-  return data.session.id;
+  return data.session;
 }
 
 export default function HomePage() {

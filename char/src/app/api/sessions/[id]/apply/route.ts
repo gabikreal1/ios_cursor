@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/session-store";
+import { getSession, saveSession } from "@/lib/session-store";
 import { startCloudApply } from "@/lib/cursor-agents";
-import { isApplyReady } from "@/lib/types";
+import { isApplyReady, type CharSession } from "@/lib/types";
 import { buildApplyArtifacts } from "@/lib/apply-artifacts";
 import { requireUserId } from "@/lib/auth";
 
 export async function POST(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
   const userId = await requireUserId();
@@ -14,6 +14,13 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;
+  const body = (await req.json().catch(() => ({}))) as {
+    session?: CharSession;
+  };
+  if (body.session?.id === id) {
+    body.session.userId = userId;
+    saveSession(body.session);
+  }
   const session = getSession(id);
   if (!session || session.userId !== userId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

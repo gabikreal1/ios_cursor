@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSession, getSession } from "@/lib/session-store";
-import { startCloudGrill } from "@/lib/cursor-agents";
+import { mockEmitCards } from "@/lib/cursor-agents";
 import { requireUserId } from "@/lib/auth";
 
 export async function POST(req: Request) {
@@ -27,9 +27,13 @@ export async function POST(req: Request) {
       repoUrl: body.repoUrl?.trim() || undefined,
     });
 
-    // Kick grill without blocking the response on Agent.create provisioning.
-    const grill = await startCloudGrill(session.id);
-    return NextResponse.json({ session: getSession(session.id), grill });
+    // Vercel functions do not share the in-memory session map. Forge the
+    // five-card hackathon deck synchronously so the browser can persist it.
+    mockEmitCards(session);
+    return NextResponse.json({
+      session: getSession(session.id),
+      grill: { mock: true, cardCount: 5 },
+    });
   } catch (err) {
     console.error("[POST /api/sessions]", err);
     return NextResponse.json(
