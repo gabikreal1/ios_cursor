@@ -1,4 +1,5 @@
 import { Agent } from "@cursor/sdk";
+import { z } from "zod";
 import {
   buildApplyPrompt,
   buildGrillPrompt,
@@ -8,6 +9,26 @@ import { appendCards, getSession, saveSession } from "./session-store";
 import type { AssumptionCard, CharSession } from "./types";
 import { buildApplyArtifacts } from "./apply-artifacts";
 import { randomUUID } from "crypto";
+
+const GeneratedCardsSchema = z.array(
+  z.object({
+    category: z.string().min(1).max(30),
+    assumption: z.string().min(20).max(280),
+    recommendedStance: z.enum(["keep", "kill", "research"]),
+    rationale: z.string().min(10).max(240),
+    kind: z.enum(["assumption", "fork"]).default("assumption"),
+    researchSuggestions: z.array(z.string().min(3).max(100)).min(1).max(3),
+  }),
+).length(5);
+
+function extractJsonArray(text: string): unknown {
+  const fenced = text.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/i);
+  const candidate = fenced?.[1] || text.slice(text.indexOf("["), text.lastIndexOf("]") + 1);
+  if (!candidate || !candidate.startsWith("[")) {
+    throw new Error("Agent did not return a JSON array");
+  }
+  return JSON.parse(candidate);
+}
 
 function apiKey() {
   const key = process.env.CURSOR_API_KEY;
@@ -122,6 +143,91 @@ export function mockEmitCards(session: CharSession) {
     },
   ];
   appendCards(session.id, cards, true);
+}
+
+/**
+ * Ask a real Cursor cloud agent for exactly five falsifiable assumptions.
+ * The cards are returned on the request path, then persisted by the browser;
+ * no shared Vercel memory or MCP callback is required.
+ */
+export async function generateAICards(sessionId: string) {
+  const session = getSession(sessionId);
+  if (!session) throw new Error("Session not found");
+  if (!process.env.CURSOR_API_KEY) throw new Error("CURSOR_API_KEY is not set");
+
+  session.heatMessages = [
+    "Cursor agent online…",
+    session.repoUrl ? "Reading your pitch + repo…" : "Reading your pitch…",
+    "Finding the five assumptions that can kill this…",
+  ];
+  saveSession(session);
+
+  const agent = await Agent.create({
+    apiKey: apiKey(),
+    model: { id: process.env.CURSOR_MODEL || "composer-2.5" },
+    cloud: {
+      repos: [
+        {
+          url:
+            session.repoUrl ||
+            process.env.CHAR_FALLBACK_REPO ||
+            "https://github.com/gabikreal1/ios_cursor",
+          startingRef: "main",
+        },
+      ],
+      autoCreatePR: false,
+    },
+  });
+
+  session.agentId = agent.agentId;
+  saveSession(session);
+
+  const repoInstruction = session.repoUrl
+    ? "Inspect the repository for evidence. Make the assumptions specific to what is actually implemented."
+    : "This is pitch-only. Do not assume features that were not stated.";
+
+  const prompt = `You are CHAR: a brutally useful product strategist. Grill this product idea:
+
+${session.pitch}
+
+${repoInstruction}
+
+Return EXACTLY 5 highest-risk, falsifiable product assumptions. Cover five distinct failure surfaces:
+1. customer + urgent pain
+2. behavior / switching
+3. core value promise
+4. distribution
+5. willingness to pay
+
+Be specific to this idea. No compliments, generic startup advice, feature requests, or solutioneering.
+Each assumption must be a claim that can be kept, killed, or researched.
+
+Return ONLY a valid JSON array. No markdown and no prose outside JSON:
+[
+  {
+    "category": "Customer",
+    "assumption": "A precise falsifiable claim",
+    "recommendedStance": "keep|kill|research",
+    "rationale": "Why this is load-bearing",
+    "kind": "assumption|fork",
+    "researchSuggestions": ["Specific test", "Specific evidence", "Specific interview"]
+  }
+]`;
+
+  const run = await agent.send(prompt);
+  const result = await run.wait();
+  const generated = GeneratedCardsSchema.parse(
+    extractJsonArray(result.result || ""),
+  );
+  const grounded = session.repoUrl ? "repo-grounded" : "pitch-only";
+  const cards: AssumptionCard[] = generated.map((card) => ({
+    ...card,
+    id: randomUUID(),
+    grounded,
+  }));
+
+  appendCards(session.id, cards, true);
+  return { agentId: agent.agentId, cards };
 }
 
 export async function startCloudGrill(sessionId: string) {

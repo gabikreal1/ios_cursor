@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { createSession, getSession } from "@/lib/session-store";
-import { mockEmitCards } from "@/lib/cursor-agents";
+import { generateAICards, mockEmitCards } from "@/lib/cursor-agents";
 import { requireUserId } from "@/lib/auth";
+
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   try {
@@ -27,12 +29,33 @@ export async function POST(req: Request) {
       repoUrl: body.repoUrl?.trim() || undefined,
     });
 
-    // Vercel functions do not share the in-memory session map. Forge the
-    // five-card hackathon deck synchronously so the browser can persist it.
-    mockEmitCards(session);
+    // Generate on this request path, then return all five cards for the
+    // browser to persist. Vercel functions do not share in-memory sessions.
+    let grill: {
+      ai: boolean;
+      agentId?: string;
+      cardCount: number;
+      fallbackReason?: string;
+    };
+    try {
+      const result = await generateAICards(session.id);
+      grill = {
+        ai: true,
+        agentId: result.agentId,
+        cardCount: result.cards.length,
+      };
+    } catch (err) {
+      console.error("[generateAICards] falling back", err);
+      mockEmitCards(session);
+      grill = {
+        ai: false,
+        cardCount: 5,
+        fallbackReason: err instanceof Error ? err.message : "AI generation failed",
+      };
+    }
     return NextResponse.json({
       session: getSession(session.id),
-      grill: { mock: true, cardCount: 5 },
+      grill,
     });
   } catch (err) {
     console.error("[POST /api/sessions]", err);
