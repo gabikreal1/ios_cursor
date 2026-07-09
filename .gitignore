@@ -1,0 +1,5 @@
+char/.env.local
+char/node_modules/
+char/.next/
+char/.env*.local
+char/.env.local
