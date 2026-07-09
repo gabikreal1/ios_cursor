@@ -50,7 +50,7 @@ export async function POST(req: Request) {
       grill = {
         ai: false,
         cardCount: 5,
-        fallbackReason: err instanceof Error ? err.message : "AI generation failed",
+        fallbackReason: "AI generation failed; served the five-card fallback",
       };
     }
     return NextResponse.json({

@@ -12,12 +12,12 @@ import { randomUUID } from "crypto";
 
 const GeneratedCardsSchema = z.array(
   z.object({
-    category: z.string().min(1).max(30),
-    assumption: z.string().min(20).max(280),
+    category: z.string().min(1),
+    assumption: z.string().min(20),
     recommendedStance: z.enum(["keep", "kill", "research"]),
-    rationale: z.string().min(10).max(240),
+    rationale: z.string().min(10),
     kind: z.enum(["assumption", "fork"]).default("assumption"),
-    researchSuggestions: z.array(z.string().min(3).max(100)).min(1).max(3),
+    researchSuggestions: z.array(z.string().min(3)).min(1).max(3),
   }),
 ).length(5);
 
