@@ -115,35 +115,10 @@ export async function startCloudGrill(sessionId: string) {
       "Forging assumption cards…",
     ];
     saveSession(session);
-    // slight delay then mock
     setTimeout(() => mockEmitCards(session), 800);
     return { mock: true as const };
   }
 
-  const agent = await Agent.create({
-    apiKey: apiKey(),
-    model: { id: process.env.CURSOR_MODEL || "composer-2.5" },
-    cloud: session.repoUrl
-      ? {
-          repos: [{ url: session.repoUrl, startingRef: "main" }],
-          autoCreatePR: false,
-        }
-      : {
-          // pitch-only: still need a repo for cloud — use CHAR's own repo if set
-          repos: [
-            {
-              url:
-                process.env.CHAR_FALLBACK_REPO ||
-                "https://github.com/gabikreal1/ios_cursor",
-              startingRef: "main",
-            },
-          ],
-          autoCreatePR: false,
-        },
-    mcpServers: mcpServers(sessionId),
-  });
-
-  session.agentId = agent.agentId;
   session.heatMessages = [
     "Cloud agent provisioning…",
     session.repoUrl ? "Cloning your repo…" : "Pitch-only heat…",
@@ -151,34 +126,77 @@ export async function startCloudGrill(sessionId: string) {
   ];
   saveSession(session);
 
-  const prompt = buildGrillPrompt({
-    sessionId,
-    pitch: session.pitch,
-    repoUrl: session.repoUrl,
-    mcpNote: `Call the char MCP tool emit_cards. Do not print JSON in chat as the primary output.`,
-  });
+  // Don't await Agent.create on the request path — provisioning can take
+  // long enough that mobile Safari looks like the button "does nothing".
+  void (async () => {
+    try {
+      const agent = await Agent.create({
+        apiKey: apiKey(),
+        model: { id: process.env.CURSOR_MODEL || "composer-2.5" },
+        cloud: session.repoUrl
+          ? {
+              repos: [{ url: session.repoUrl, startingRef: "main" }],
+              autoCreatePR: false,
+            }
+          : {
+              repos: [
+                {
+                  url:
+                    process.env.CHAR_FALLBACK_REPO ||
+                    "https://github.com/gabikreal1/ios_cursor",
+                  startingRef: "main",
+                },
+              ],
+              autoCreatePR: false,
+            },
+        mcpServers: mcpServers(sessionId),
+      });
 
-  // fire and forget — cards arrive via MCP
-  void agent
-    .send(prompt)
-    .then(async (run) => {
+      const s0 = getSession(sessionId);
+      if (s0) {
+        s0.agentId = agent.agentId;
+        s0.heatMessages = [
+          "Agent online…",
+          "Grilling assumptions…",
+          "Waiting for cards…",
+        ];
+        saveSession(s0);
+      }
+
+      const prompt = buildGrillPrompt({
+        sessionId,
+        pitch: session.pitch,
+        repoUrl: session.repoUrl,
+        mcpNote: `Call the char MCP tool emit_cards. Do not print JSON in chat as the primary output.`,
+      });
+
+      const run = await agent.send(prompt);
       await run.wait();
       const s = getSession(sessionId);
       if (s && !s.grillDone && s.cards.length > 0) {
         s.grillDone = true;
         saveSession(s);
-      }
-    })
-    .catch((err) => {
-      const s = getSession(sessionId);
-      if (s) {
-        s.heatMessages = [`Grill failed: ${String(err)}`, "Falling back to mock cards…"];
+      } else if (s && s.cards.length === 0) {
+        s.heatMessages = [
+          "Agent finished without cards — forging fallback…",
+        ];
         saveSession(s);
         mockEmitCards(s);
       }
-    });
+    } catch (err) {
+      const s = getSession(sessionId);
+      if (s) {
+        s.heatMessages = [
+          `Grill failed: ${String(err)}`,
+          "Falling back to mock cards…",
+        ];
+        saveSession(s);
+        mockEmitCards(s);
+      }
+    }
+  })();
 
-  return { agentId: agent.agentId, mock: false as const };
+  return { mock: false as const, pending: true as const };
 }
 
 export async function startCloudResearch(input: {

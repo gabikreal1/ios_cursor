@@ -9,5 +9,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   if (bypass) {
     return <>{children}</>;
   }
-  return <ClerkProvider>{children}</ClerkProvider>;
+  return (
+    <ClerkProvider
+      signInFallbackRedirectUrl="/"
+      signUpFallbackRedirectUrl="/"
+      afterSignOutUrl="/"
+    >
+      {children}
+    </ClerkProvider>
+  );
 }
