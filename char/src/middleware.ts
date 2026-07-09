@@ -1,23 +1,32 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 const isProtected = createRouteMatcher([
   "/s(.*)",
   "/api/sessions(.*)",
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
-  // MCP endpoint is called by Cursor cloud with shared secret, not Clerk
-  if (req.nextUrl.pathname.startsWith("/api/mcp")) {
-    return NextResponse.next();
-  }
-  if (process.env.CHAR_DEV_BYPASS === "1") {
-    return NextResponse.next();
-  }
-  if (isProtected(req)) {
-    await auth.protect();
-  }
-});
+const hasClerk =
+  Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) &&
+  Boolean(process.env.CLERK_SECRET_KEY);
+
+const passthrough = (_req: NextRequest) => NextResponse.next();
+
+// Without Clerk keys, clerkMiddleware throws MIDDLEWARE_INVOCATION_FAILED on Vercel.
+export default hasClerk
+  ? clerkMiddleware(async (auth, req) => {
+      // MCP endpoint is called by Cursor cloud with shared secret, not Clerk
+      if (req.nextUrl.pathname.startsWith("/api/mcp")) {
+        return NextResponse.next();
+      }
+      if (process.env.CHAR_DEV_BYPASS === "1") {
+        return NextResponse.next();
+      }
+      if (isProtected(req)) {
+        await auth.protect();
+      }
+    })
+  : passthrough;
 
 export const config = {
   matcher: [
