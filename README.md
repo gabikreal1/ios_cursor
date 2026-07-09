@@ -1,13 +1,14 @@
 # ios_cursor
 
-Research workspace for **iOS device-context × AI** product exploration.
+Research workspace for **iOS device-context × AI** product exploration — remapped for the [London iOS Cursor Hackathon 2026](https://cursor-ios-hackathon-07-2026.vercel.app/).
 
 ## Quick links
 
+- **[Hackathon win strategy](docs/london-ios-hackathon-2026-strategy.md)** ← start here for the evening event
 - [Research synthesis](docs/research/README.md)
 - [Device context API catalog](docs/research/ios-device-context-catalog.md)
 - [Ambient surfaces for AI](docs/research/ios-ambient-surfaces-ai.md)
-- [App concepts + top bets](docs/research/ios-ai-app-concepts.md)
+- [App concepts + longer-horizon bets](docs/research/ios-ai-app-concepts.md)
 
 ## Agent skills (Matt Pocock)
 
