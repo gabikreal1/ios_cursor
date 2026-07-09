@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { EmitCardsSchema, EmitResearchSchema } from "@/lib/types";
-import { appendCards, getSession, requeueFront, decide } from "@/lib/session-store";
+import {
+  appendCards,
+  createSession,
+  getSession,
+  requeueFront,
+  decide,
+} from "@/lib/session-store";
 
 function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -11,6 +17,15 @@ function checkAuth(req: Request) {
   const header = req.headers.get("authorization") || "";
   const token = header.replace(/^Bearer\s+/i, "");
   return token === secret;
+}
+
+function ensureMcpSession(req: Request, sessionId: string) {
+  if (getSession(sessionId)) return;
+  createSession({
+    id: sessionId,
+    userId: process.env.CHAR_MCP_USER_ID || "hack-user",
+    pitch: req.headers.get("x-char-pitch") || "pitch-only grill",
+  });
 }
 
 /**
@@ -82,7 +97,7 @@ export async function POST(req: Request) {
     try {
       if (name === "emit_cards") {
         const parsed = EmitCardsSchema.parse(args);
-        if (!getSession(parsed.sessionId)) throw new Error("Unknown session");
+        ensureMcpSession(req, parsed.sessionId);
         const session = appendCards(parsed.sessionId, parsed.cards, parsed.done);
         return NextResponse.json({
           jsonrpc: "2.0",
@@ -131,6 +146,7 @@ export async function POST(req: Request) {
   // Direct REST fallbacks (easier to test)
   if (body.tool === "emit_cards" || body.name === "emit_cards") {
     const parsed = EmitCardsSchema.parse(body.arguments || body);
+    ensureMcpSession(req, parsed.sessionId);
     const session = appendCards(parsed.sessionId, parsed.cards, parsed.done);
     return NextResponse.json({ ok: true, session });
   }

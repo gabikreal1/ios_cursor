@@ -12,7 +12,17 @@ export async function GET(
   }
   const { id } = await ctx.params;
   const session = getSession(id);
-  if (!session || session.userId !== userId) {
+  if (!session) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const sharedOwners = new Set([
+    userId,
+    "hack-user",
+    "dev-user",
+    "cloud-agent",
+    process.env.CHAR_MCP_USER_ID || "hack-user",
+  ]);
+  if (!sharedOwners.has(session.userId)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   return NextResponse.json({ session });
