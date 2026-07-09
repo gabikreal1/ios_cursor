@@ -1,7 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Protect session UI; APIs return JSON 401 themselves via requireUserId.
+// Page routes that require a signed-in user (HTML redirect OK).
 const isProtectedPage = createRouteMatcher(["/s(.*)"]);
 
 const hasClerk =
@@ -10,19 +10,18 @@ const hasClerk =
 
 const passthrough = (_req: NextRequest) => NextResponse.next();
 
-// Without Clerk keys, clerkMiddleware throws MIDDLEWARE_INVOCATION_FAILED on Vercel.
+/**
+ * Important: do NOT early-return NextResponse.next() for /api/* —
+ * that skips Clerk's auth header injection and makes auth() throw
+ * "can't detect usage of clerkMiddleware()" in route handlers.
+ * Just skip protect() for APIs; handlers return JSON 401 themselves.
+ */
 export default hasClerk
   ? clerkMiddleware(async (auth, req) => {
-      if (req.nextUrl.pathname.startsWith("/api/mcp")) {
-        return NextResponse.next();
-      }
-      if (process.env.CHAR_DEV_BYPASS === "1") {
-        return NextResponse.next();
-      }
-      // Never redirect API routes — let handlers return JSON.
-      if (req.nextUrl.pathname.startsWith("/api/")) {
-        return NextResponse.next();
-      }
+      const path = req.nextUrl.pathname;
+      if (path.startsWith("/api/mcp")) return;
+      if (process.env.CHAR_DEV_BYPASS === "1") return;
+      if (path.startsWith("/api/")) return;
       if (isProtectedPage(req)) {
         await auth.protect();
       }

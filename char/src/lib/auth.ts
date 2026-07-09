@@ -9,6 +9,13 @@ export async function requireUserId(): Promise<string | null> {
   ) {
     return "dev-user";
   }
-  const { userId } = await auth();
-  return userId;
+  try {
+    const { userId } = await auth();
+    return userId;
+  } catch (err) {
+    // Never let Clerk middleware-detection errors become HTML 500s —
+    // Safari surfaces those as "SyntaxError: The string did not match…"
+    console.error("[requireUserId]", err);
+    return null;
+  }
 }
