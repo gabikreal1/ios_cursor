@@ -5,6 +5,7 @@ Research workspace for **iOS device-context × AI** product exploration — rema
 ## Quick links
 
 - **[Hackathon win strategy](docs/london-ios-hackathon-2026-strategy.md)** ← start here for the evening event
+- **[Europe agenda (Jul 2026)](docs/europe-agenda-july-2026.md)** ← what’s timely in EU/UK right now
 - [Research synthesis](docs/research/README.md)
 - [Device context API catalog](docs/research/ios-device-context-catalog.md)
 - [Ambient surfaces for AI](docs/research/ios-ambient-surfaces-ai.md)

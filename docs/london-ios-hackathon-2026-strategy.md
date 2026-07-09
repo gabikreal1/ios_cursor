@@ -7,6 +7,8 @@
 
 **Verdict up front:** Enter the **remote-building track**. Ship a **phone-native control plane for agent work with structured human oversight** — not a polished sensor app. iOS Cursor must be the product surface in the demo, not just the IDE that wrote the code.
 
+**Europe-now twist (Jul 2026):** Layer **EU AI Act Article 50 transparency** (enforcement **2 Aug**) and/or a **London heatwave / on-call** persona onto the same spine. See [europe-agenda-july-2026.md](./europe-agenda-july-2026.md).
+
 ---
 
 ## 1. Constraint analysis
@@ -151,7 +153,7 @@ If iOS Cursor is only visible in beat 2 as “we typed here,” you lose. It mus
 
 ## 4. Top recommended play
 
-### Primary: **Gatekeeper** (Remote-building track)
+### Primary: **Gatekeeper** (Remote-building track) + Europe twist
 
 **Why this wins an evening hackathon:**
 
@@ -160,12 +162,17 @@ If iOS Cursor is only visible in beat 2 as “we typed here,” you lose. It mus
 3. **Feasibility** — one repo, one skill, two fixture PRs, optional tiny audit DB. No sensor permissions, no Xcode, no Remote Control dependency.
 4. **Differentiation vs the field** — many teams will show “agent wrote code.” You show “agent worked; human governed; phone was the control plane.”
 5. **Failure mode is still demoable** — if the fancy UI slips, the iOS Cursor review + a `REVIEW.md` risk card still tells the story.
+6. **Europe relevance** — stamp Art.50 disclosure on AI-facing outputs; open the pitch with on-call *or* heatwave commute (“I had to ship from my phone”).
 
 **Ruthless scope cut:** No multi-tenant SaaS. No Slack. No auto-merge. No “platform.” Ship **risk-aware review decisions on the phone**.
 
-### Backup: **Shotfix**
+### Backup A: **Shotfix**
 
 Switch if: your team is stronger at frontend visual bugs than process/product narrative, or Gatekeeper starts feeling like “GitHub with extra steps” in rehearsal. Shotfix has instant visual proof and Cursor’s own blog as prior art — judges get it in 10 seconds.
+
+### Backup B (Open Track / local wow): **Heatwave Commute Copilot**
+
+Switch if: the room energy is “build something London feels tonight” and you want Open Track empathy over factory narrative. Still build *from* Cursor iOS; still show agent autonomy + human oversight on any automated claims/routes.
 
 **Do not backup to native ambient apps.** That’s a different competition.
 
