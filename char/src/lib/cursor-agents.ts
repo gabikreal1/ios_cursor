@@ -1,4 +1,5 @@
 import { Agent } from "@cursor/sdk";
+import { z } from "zod";
 import {
   buildApplyPrompt,
   buildGrillPrompt,
@@ -8,6 +9,26 @@ import { appendCards, getSession, saveSession } from "./session-store";
 import type { AssumptionCard, CharSession } from "./types";
 import { buildApplyArtifacts } from "./apply-artifacts";
 import { randomUUID } from "crypto";
+
+const GeneratedCardsSchema = z.array(
+  z.object({
+    category: z.string().min(1),
+    assumption: z.string().min(20),
+    recommendedStance: z.enum(["keep", "kill", "research"]),
+    rationale: z.string().min(10),
+    kind: z.enum(["assumption", "fork"]).default("assumption"),
+    researchSuggestions: z.array(z.string().min(3)).min(1).max(3),
+  }),
+).length(5);
+
+function extractJsonArray(text: string): unknown {
+  const fenced = text.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/i);
+  const candidate = fenced?.[1] || text.slice(text.indexOf("["), text.lastIndexOf("]") + 1);
+  if (!candidate || !candidate.startsWith("[")) {
+    throw new Error("Agent did not return a JSON array");
+  }
+  return JSON.parse(candidate);
+}
 
 function apiKey() {
   const key = process.env.CURSOR_API_KEY;
@@ -41,68 +62,172 @@ function mcpServers(sessionId: string) {
 /** Demo cards when CURSOR_API_KEY missing or CHAR_MOCK=1 */
 export function mockEmitCards(session: CharSession) {
   const grounded = session.repoUrl ? "repo-grounded" : "pitch-only";
+  const idea = session.pitch.length > 90
+    ? `${session.pitch.slice(0, 87)}…`
+    : session.pitch;
   const cards: AssumptionCard[] = [
     {
       id: randomUUID(),
-      category: "Wedge",
+      category: "Customer",
       assumption:
-        "Solo founders will open CHAR in the post-idea / pre-build window, not during weekly planning.",
+        `A specific group of people feels the pain behind “${idea}” often enough to seek a new solution.`,
       recommendedStance: "keep",
-      rationale: "Matches the locked ICP moment; weekly planning is crowded.",
+      rationale: "No sharp customer and urgent pain means there is no wedge.",
       kind: "assumption",
       grounded,
       researchSuggestions: [
-        "Indie Hackers posts about idea→build drop-off",
-        "Cursor iOS usage moments",
-        "Competing PM chatbot retention",
+        "Interview five target users",
+        "Find existing workarounds",
+        "Measure how often the pain occurs",
       ],
     },
     {
       id: randomUUID(),
-      category: "Interaction",
+      category: "Behavior",
       assumption:
-        "Swipe keep/kill on assumptions beats a chat Q&A for forcing decisions.",
+        "Users will change their current behavior instead of tolerating the problem or using their existing workaround.",
       recommendedStance: "keep",
-      rationale: "Muscle-memory judgment; chat invites performance.",
+      rationale: "A better product still loses when switching cost beats pain.",
       kind: "assumption",
       grounded,
       researchSuggestions: [
-        "Tinder-for-ideas products",
-        "Unilever Idea Swipe case",
-        "Decision fatigue studies on binary choice",
+        "Map the current workflow",
+        "Estimate switching cost",
+        "Test a manual concierge version",
+      ],
+    },
+    {
+      id: randomUUID(),
+      category: "Promise",
+      assumption:
+        "The product can deliver its core promise quickly enough that a first-time user feels the win in one session.",
+      recommendedStance: "keep",
+      rationale: "If value arrives late, activation dies before the idea gets a chance.",
+      kind: "assumption",
+      grounded,
+      researchSuggestions: [
+        "Define the first five-minute win",
+        "Prototype the happy path",
+        "Remove setup steps",
       ],
     },
     {
       id: randomUUID(),
       category: "Distribution",
       assumption:
-        "Applying rails into the repo (CHAR.md + ADRs) is more valuable than a shareable roast image.",
-      recommendedStance: "keep",
-      rationale: "Cursor Agent SDK is the differentiator.",
-      kind: "fork",
+        "There is one repeatable channel where target users already gather and can be reached without paid scale.",
+      recommendedStance: "research",
+      rationale: "A product without an acquisition path is a private demo.",
+      kind: "assumption",
       grounded,
       researchSuggestions: [
-        "Matt Pocock ADR adoption",
-        "AGENTS.md conventions",
-        "Founder willingness to grant GitHub write",
+        "Name the first 20 users",
+        "Audit niche communities",
+        "Test one founder-led channel",
       ],
     },
     {
       id: randomUUID(),
-      category: "Monetization",
-      assumption: "Founders will pay $10/mo before they have a repo.",
-      recommendedStance: "kill",
-      rationale: "Pre-repo moment is fragile; monetize after first Apply win.",
-      kind: "assumption",
+      category: "Money",
+      assumption:
+        "The value is painful or valuable enough that someone will pay before the product becomes feature-complete.",
+      recommendedStance: "research",
+      rationale: "Usage without willingness to pay can hide a hobby, not a business.",
+      kind: "fork",
       grounded,
       researchSuggestions: [
-        "Indie tool pricing benchmarks",
-        "Freemium conversion for devtools",
-        "Hackathon-to-paid paths",
+        "Ask for a paid pilot",
+        "Test three price points",
+        "Compare the cost of the current workaround",
       ],
     },
   ];
   appendCards(session.id, cards, true);
+}
+
+/**
+ * Ask a real Cursor cloud agent for exactly five falsifiable assumptions.
+ * The cards are returned on the request path, then persisted by the browser;
+ * no shared Vercel memory or MCP callback is required.
+ */
+export async function generateAICards(sessionId: string) {
+  const session = getSession(sessionId);
+  if (!session) throw new Error("Session not found");
+  if (!process.env.CURSOR_API_KEY) throw new Error("CURSOR_API_KEY is not set");
+
+  session.heatMessages = [
+    "Cursor agent online…",
+    session.repoUrl ? "Reading your pitch + repo…" : "Reading your pitch…",
+    "Finding the five assumptions that can kill this…",
+  ];
+  saveSession(session);
+
+  const agent = await Agent.create({
+    apiKey: apiKey(),
+    model: { id: process.env.CURSOR_MODEL || "composer-2.5" },
+    cloud: {
+      repos: [
+        {
+          url:
+            session.repoUrl ||
+            process.env.CHAR_FALLBACK_REPO ||
+            "https://github.com/gabikreal1/ios_cursor",
+          startingRef: "main",
+        },
+      ],
+      autoCreatePR: false,
+    },
+  });
+
+  session.agentId = agent.agentId;
+  saveSession(session);
+
+  const repoInstruction = session.repoUrl
+    ? "Inspect the repository for evidence. Make the assumptions specific to what is actually implemented."
+    : "This is pitch-only. Do not assume features that were not stated.";
+
+  const prompt = `You are CHAR: a brutally useful product strategist. Grill this product idea:
+
+${session.pitch}
+
+${repoInstruction}
+
+Return EXACTLY 5 highest-risk, falsifiable product assumptions. Cover five distinct failure surfaces:
+1. customer + urgent pain
+2. behavior / switching
+3. core value promise
+4. distribution
+5. willingness to pay
+
+Be specific to this idea. No compliments, generic startup advice, feature requests, or solutioneering.
+Each assumption must be a claim that can be kept, killed, or researched.
+
+Return ONLY a valid JSON array. No markdown and no prose outside JSON:
+[
+  {
+    "category": "Customer",
+    "assumption": "A precise falsifiable claim",
+    "recommendedStance": "keep|kill|research",
+    "rationale": "Why this is load-bearing",
+    "kind": "assumption|fork",
+    "researchSuggestions": ["Specific test", "Specific evidence", "Specific interview"]
+  }
+]`;
+
+  const run = await agent.send(prompt);
+  const result = await run.wait();
+  const generated = GeneratedCardsSchema.parse(
+    extractJsonArray(result.result || ""),
+  );
+  const grounded = session.repoUrl ? "repo-grounded" : "pitch-only";
+  const cards: AssumptionCard[] = generated.map((card) => ({
+    ...card,
+    id: randomUUID(),
+    grounded,
+  }));
+
+  appendCards(session.id, cards, true);
+  return { agentId: agent.agentId, cards };
 }
 
 export async function startCloudGrill(sessionId: string) {
@@ -115,35 +240,10 @@ export async function startCloudGrill(sessionId: string) {
       "Forging assumption cards…",
     ];
     saveSession(session);
-    // slight delay then mock
     setTimeout(() => mockEmitCards(session), 800);
     return { mock: true as const };
   }
 
-  const agent = await Agent.create({
-    apiKey: apiKey(),
-    model: { id: process.env.CURSOR_MODEL || "composer-2.5" },
-    cloud: session.repoUrl
-      ? {
-          repos: [{ url: session.repoUrl, startingRef: "main" }],
-          autoCreatePR: false,
-        }
-      : {
-          // pitch-only: still need a repo for cloud — use CHAR's own repo if set
-          repos: [
-            {
-              url:
-                process.env.CHAR_FALLBACK_REPO ||
-                "https://github.com/gabikreal1/ios_cursor",
-              startingRef: "main",
-            },
-          ],
-          autoCreatePR: false,
-        },
-    mcpServers: mcpServers(sessionId),
-  });
-
-  session.agentId = agent.agentId;
   session.heatMessages = [
     "Cloud agent provisioning…",
     session.repoUrl ? "Cloning your repo…" : "Pitch-only heat…",
@@ -151,34 +251,77 @@ export async function startCloudGrill(sessionId: string) {
   ];
   saveSession(session);
 
-  const prompt = buildGrillPrompt({
-    sessionId,
-    pitch: session.pitch,
-    repoUrl: session.repoUrl,
-    mcpNote: `Call the char MCP tool emit_cards. Do not print JSON in chat as the primary output.`,
-  });
+  // Don't await Agent.create on the request path — provisioning can take
+  // long enough that mobile Safari looks like the button "does nothing".
+  void (async () => {
+    try {
+      const agent = await Agent.create({
+        apiKey: apiKey(),
+        model: { id: process.env.CURSOR_MODEL || "composer-2.5" },
+        cloud: session.repoUrl
+          ? {
+              repos: [{ url: session.repoUrl, startingRef: "main" }],
+              autoCreatePR: false,
+            }
+          : {
+              repos: [
+                {
+                  url:
+                    process.env.CHAR_FALLBACK_REPO ||
+                    "https://github.com/gabikreal1/ios_cursor",
+                  startingRef: "main",
+                },
+              ],
+              autoCreatePR: false,
+            },
+        mcpServers: mcpServers(sessionId),
+      });
 
-  // fire and forget — cards arrive via MCP
-  void agent
-    .send(prompt)
-    .then(async (run) => {
+      const s0 = getSession(sessionId);
+      if (s0) {
+        s0.agentId = agent.agentId;
+        s0.heatMessages = [
+          "Agent online…",
+          "Grilling assumptions…",
+          "Waiting for cards…",
+        ];
+        saveSession(s0);
+      }
+
+      const prompt = buildGrillPrompt({
+        sessionId,
+        pitch: session.pitch,
+        repoUrl: session.repoUrl,
+        mcpNote: `Call the char MCP tool emit_cards. Do not print JSON in chat as the primary output.`,
+      });
+
+      const run = await agent.send(prompt);
       await run.wait();
       const s = getSession(sessionId);
       if (s && !s.grillDone && s.cards.length > 0) {
         s.grillDone = true;
         saveSession(s);
-      }
-    })
-    .catch((err) => {
-      const s = getSession(sessionId);
-      if (s) {
-        s.heatMessages = [`Grill failed: ${String(err)}`, "Falling back to mock cards…"];
+      } else if (s && s.cards.length === 0) {
+        s.heatMessages = [
+          "Agent finished without cards — forging fallback…",
+        ];
         saveSession(s);
         mockEmitCards(s);
       }
-    });
+    } catch (err) {
+      const s = getSession(sessionId);
+      if (s) {
+        s.heatMessages = [
+          `Grill failed: ${String(err)}`,
+          "Falling back to mock cards…",
+        ];
+        saveSession(s);
+        mockEmitCards(s);
+      }
+    }
+  })();
 
-  return { agentId: agent.agentId, mock: false as const };
+  return { mock: false as const, pending: true as const };
 }
 
 export async function startCloudResearch(input: {

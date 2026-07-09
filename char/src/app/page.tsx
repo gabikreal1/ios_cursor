@@ -3,35 +3,81 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import BlurText from "@/components/BlurText";
-import FadeContent from "@/components/FadeContent";
 import { Button } from "@/components/ui/button";
-import { AuthChrome } from "@/components/char/AuthChrome";
+import type { CharSession } from "@/lib/types";
 
-export default function HomePage() {
+const MIN_PITCH = 8;
+
+type HeatProps = {
+  pitch: string;
+  repoUrl: string;
+  pitchReady: boolean;
+};
+
+function HeatControls({ pitch, repoUrl, pitchReady }: HeatProps) {
   const router = useRouter();
-  const [pitch, setPitch] = useState("");
-  const [repoUrl, setRepoUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const bypass = process.env.NEXT_PUBLIC_CHAR_DEV_BYPASS === "1";
 
   async function heat() {
+    if (!pitchReady || busy) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pitch, repoUrl }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to start");
-      router.push(`/s/${data.session.id}`);
+      const session = await postSession(pitch, repoUrl);
+      sessionStorage.setItem(`char:${session.id}`, JSON.stringify(session));
+      router.push(`/s/${session.id}`);
     } catch (e) {
-      setError(String(e));
+      setError(e instanceof Error ? e.message : String(e));
       setBusy(false);
     }
   }
+
+  return (
+    <>
+      <Button
+        disabled={busy || !pitchReady}
+        onClick={heat}
+        className="h-14 w-full rounded-full bg-white text-base font-medium text-black hover:bg-white/90 disabled:opacity-40"
+      >
+        {busy ? "Striking match…" : "Heat it"}
+      </Button>
+      {error && (
+        <p className="mt-3 text-center text-sm text-rose-300">{error}</p>
+      )}
+    </>
+  );
+}
+
+async function postSession(
+  pitch: string,
+  repoUrl: string,
+): Promise<CharSession> {
+  const res = await fetch("/api/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pitch, repoUrl }),
+  });
+  const text = await res.text();
+  let data: { error?: string; session?: CharSession } = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(
+      res.status === 401
+        ? "Sign in to heat it"
+        : `Server error (${res.status})`,
+    );
+  }
+  if (!res.ok) throw new Error(data.error || "Failed to start");
+  if (!data.session?.id) throw new Error("No session returned");
+  return data.session;
+}
+
+export default function HomePage() {
+  const [pitch, setPitch] = useState("");
+  const [repoUrl, setRepoUrl] = useState("");
+  const pitchReady = pitch.trim().length >= MIN_PITCH;
 
   return (
     <main className="relative mx-auto flex min-h-[100dvh] max-w-lg flex-col px-5 pb-10 pt-8">
@@ -41,10 +87,12 @@ export default function HomePage() {
         <p className="text-[11px] uppercase tracking-[0.28em] text-white/40">
           CHAR
         </p>
-        <AuthChrome />
+        <span className="text-[10px] uppercase tracking-[0.2em] text-amber-300/60">
+          hack mode
+        </span>
       </header>
 
-      <FadeContent className="relative z-10 flex flex-1 flex-col">
+      <div className="relative z-10 flex flex-1 flex-col">
         <BlurText
           text="Swipe your soft spots."
           className="font-[family-name:var(--font-display)] text-4xl leading-tight text-white sm:text-5xl"
@@ -68,21 +116,22 @@ export default function HomePage() {
             placeholder="GitHub repo URL (optional)"
             className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-cyan-400/40"
           />
+          {!pitchReady && pitch.trim().length > 0 && (
+            <p className="text-xs text-white/35">
+              {MIN_PITCH - pitch.trim().length} more characters to strike a
+              match…
+            </p>
+          )}
         </div>
 
         <div className="mt-auto pt-8">
-          <Button
-            disabled={busy || pitch.trim().length < 8}
-            onClick={heat}
-            className="h-14 w-full rounded-full bg-white text-base font-medium text-black hover:bg-white/90 disabled:opacity-40"
-          >
-            {busy ? "Striking match…" : bypass ? "Heat it (dev)" : "Heat it"}
-          </Button>
-          {error && (
-            <p className="mt-3 text-center text-sm text-rose-300">{error}</p>
-          )}
+          <HeatControls
+            pitch={pitch}
+            repoUrl={repoUrl}
+            pitchReady={pitchReady}
+          />
         </div>
-      </FadeContent>
+      </div>
     </main>
   );
 }

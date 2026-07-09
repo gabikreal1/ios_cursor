@@ -23,32 +23,64 @@ export function GrillSession({ sessionId, initial }: Props) {
   const current = useMemo(() => pickCurrent(session), [session]);
 
   useEffect(() => {
-    if (session.status === "done" || session.status === "ready_to_apply") return;
-    const t = setInterval(async () => {
-      const res = await fetch(`/api/sessions/${sessionId}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      setSession(data.session);
-    }, 1200);
-    return () => clearInterval(t);
-  }, [sessionId, session.status]);
+    sessionStorage.setItem(`char:${sessionId}`, JSON.stringify(session));
+  }, [session, sessionId]);
 
   async function swipe(action: "keep" | "kill" | "research" | "enough", extra?: { query?: string }) {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/swipe`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action,
-          cardId: current?.id,
-          query: extra?.query,
-        }),
+      const now = new Date().toISOString();
+      setSession((previous) => {
+        const next: CharSession = {
+          ...previous,
+          cards: [...previous.cards],
+          queue: [...previous.queue],
+          decisions: { ...previous.decisions },
+          updatedAt: now,
+        };
+
+        if (action === "enough") {
+          for (const id of next.queue) next.decisions[id] = "skipped";
+          next.queue = [];
+          next.grillDone = true;
+          next.status = "ready_to_apply";
+          return next;
+        }
+
+        if (!current) return next;
+        next.decisions[current.id] = action;
+        next.queue = next.queue.filter((id) => id !== current.id);
+
+        if (action === "research") {
+          const brief: AssumptionCard = {
+            id: crypto.randomUUID(),
+            parentId: current.id,
+            category: "Research brief",
+            assumption: `Evidence check: ${extra?.query || current.assumption}`,
+            recommendedStance: "research",
+            rationale:
+              "Hack-mode brief: validate this with five target users before treating it as true.",
+            findings:
+              "The riskiest signal is whether users already spend time or money on a workaround. Ask for evidence, not opinions.",
+            kind: "research_brief",
+            grounded: current.grounded,
+            color: "research",
+            affectsCardIds: [current.id],
+            researchSuggestions: current.researchSuggestions,
+          };
+          next.cards.push(brief);
+          next.queue.unshift(brief.id);
+        }
+
+        if (next.queue.length === 0) {
+          next.grillDone = true;
+          next.status = "ready_to_apply";
+        } else {
+          next.status = "swiping";
+        }
+        return next;
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Swipe failed");
-      setSession(data.session);
       setResearchOpen(false);
       setQuery("");
     } catch (e) {
@@ -64,6 +96,8 @@ export function GrillSession({ sessionId, initial }: Props) {
     try {
       const res = await fetch(`/api/sessions/${sessionId}/apply`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Apply failed");

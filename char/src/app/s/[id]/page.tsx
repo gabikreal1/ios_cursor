@@ -13,6 +13,16 @@ export default function SessionPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const cached = sessionStorage.getItem(`char:${params.id}`);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached) as CharSession;
+          if (!cancelled) setSession(parsed);
+          return;
+        } catch {
+          sessionStorage.removeItem(`char:${params.id}`);
+        }
+      }
       const res = await fetch(`/api/sessions/${params.id}`);
       const data = await res.json();
       if (cancelled) return;
