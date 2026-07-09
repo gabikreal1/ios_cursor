@@ -4,10 +4,7 @@ import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 
 export function AuthChrome() {
-  if (
-    !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
-    process.env.NEXT_PUBLIC_CHAR_DEV_BYPASS === "1"
-  ) {
+  if (process.env.NEXT_PUBLIC_CHAR_DEV_BYPASS === "1") {
     return (
       <span className="text-[11px] uppercase tracking-wider text-white/30">
         dev bypass
