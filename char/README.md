@@ -2,6 +2,10 @@
 
 Mobile-first web app: swipe assumption cards (grill-me), research, Apply → `CHAR.md` + ADRs + `AGENTS.md` via Cursor Agent SDK.
 
+**Live:** [https://char-xi.vercel.app](https://char-xi.vercel.app)
+
+In Clerk Dashboard → Domains / Allowed origins, add `https://char-xi.vercel.app` (and the `*.vercel.app` preview host if you use previews).
+
 ## Quick start (mock, no keys)
 
 ```bash
